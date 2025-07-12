@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Context Manager for LLMs</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --surface-color: #2a2a2a;
+            --primary-color: #4a90e2;
+            --text-color: #e0e0e0;
+            --border-color: #444;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            padding: 10px 20px;
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        #app-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            padding: 15px;
+            background-color: var(--surface-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        #sidebar {
+            flex: 0 0 280px;
+            border-right: 1px solid var(--border-color);
+        }
+
+        #main-content {
+            flex-grow: 1;
+            border-right: 1px solid var(--border-color);
+        }
+
+        #context-panel {
+            flex: 0 0 320px;
+        }
+
+        h2, h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #5aa1f2;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1;
+        }
+
+        li {
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        
+        li:hover {
+            background-color: #333;
+        }
+        
+        li.active {
+            background-color: rgba(74, 144, 226, 0.2);
+            border-color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        #user-query {
+            min-height: 100px;
+            resize: vertical;
+            flex-grow: 1;
+        }
+
+        #generated-prompt-container {
+            margin-top: 20px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #generated-prompt {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 4px;
+            flex-grow: 1;
+            overflow-y: auto;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 0.9em;
+        }
+        
+        .context-item {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .context-item h4 { margin: 0 0 5px 0; }
+        .context-item p, .context-item ul { margin: 0; padding-left: 15px; font-size: 0.9em; opacity: 0.8; }
+        .context-item code { background-color: #444; padding: 2px 4px; border-radius: 3px;}
+
+
+        /* Mobile Responsiveness */
+        @media (max-width: 900px) {
+            #app-container {
+                flex-direction: column;
+            }
+            #sidebar, #context-panel, #main-content {
+                flex-basis: auto;
+                border: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            #main-content { order: -1; } /* Puts chat on top on mobile */
+        }
+    </style>
+</head>
+<body>
+
+    <header>Personal Context Manager</header>
+
+    <div id="app-container">
+        <!-- Sidebar: Projects and Knowledge Snippets -->
+        <div id="sidebar" class="panel">
+            <div>
+                <h2>Projects</h2>
+                <ul id="project-list"></ul>
+                <button id="new-project-btn">New Project</button>
+            </div>
+            <div style="margin-top: 20px; flex-grow: 1; display: flex; flex-direction: column;">
+                <h2>Knowledge Base</h2>
+                <input type="text" id="snippet-search" placeholder="Search snippets...">
+                <ul id="snippet-list"></ul>
+                <button id="new-snippet-btn">New Snippet</button>
+            </div>
+        </div>
+
+        <!-- Main Content: Chat-like interface for prompt generation -->
+        <div id="main-content" class="panel">
+            <h2 id="active-project-title">No Active Project</h2>
+            <textarea id="user-query" placeholder="Enter your request or question here..."></textarea>
+            <div style="display: flex; gap: 10px;">
+                <button id="generate-prompt-btn" style="flex-grow: 1;">Generate & Copy Prompt</button>
+            </div>
+            <div id="generated-prompt-container">
+                <h3>Generated Prompt</h3>
+                <pre id="generated-prompt">Select a project and type a query to generate a prompt.</pre>
+            </div>
+        </div>
+
+        <!-- Context Panel: Shows what's currently loaded -->
+        <div id="context-panel" class="panel">
+            <h2>Loaded Context</h2>
+            <h3>Active Project Details</h3>
+            <div id="context-project" class="context-item">
+                <p>No project selected.</p>
+            </div>
+            
+            <h3>Automatically Loaded Snippets</h3>
+            <div id="context-snippets">
+                <p>No snippets loaded.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DB_NAME = 'PersonalContextDB';
+        const DB_VERSION = 1;
+
+        const state = {
+            db: null,
+            activeProjectId: null,
+        };
+
+        // --- DATABASE LOGIC ---
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('projects')) {
+                        db.createObjectStore('projects', { keyPath: 'id' });
+                    }
+                    if (!db.objectStoreNames.contains('snippets')) {
+                        const snippetStore = db.createObjectStore('snippets', { keyPath: 'id' });
+                        snippetStore.createIndex('tags', 'tags', { multiEntry: true });
+                    }
+                    if (!db.objectStoreNames.contains('config')) {
+                        db.createObjectStore('config', { keyPath: 'id' });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    state.db = event.target.result;
+                    console.log("Database initialized successfully.");
+                    resolve(state.db);
+                };
+
+                request.onerror = (event) => {
+                    console.error("Database error:", event.target.errorCode);
+                    reject(event.target.errorCode);
+                };
+            });
+        }
+
+        function dbOp(storeName, mode, operation) {
+            return new Promise((resolve, reject) => {
+                if (!state.db) return reject("DB not initialized.");
+                const transaction = state.db.transaction(storeName, mode);
+                const store = transaction.objectStore(storeName);
+                operation(store, resolve, reject);
+                transaction.onerror = (event) => reject(event.target.error);
+            });
+        }
+        
+        const db = {
+            add: (storeName, item) => dbOp(storeName, 'readwrite', (store, resolve) => store.add(item).onsuccess = resolve),
+            get: (storeName, id) => dbOp(storeName, 'readonly', (store, resolve) => store.get(id).onsuccess = e => resolve(e.target.result)),
+            getAll: (storeName) => dbOp(storeName, 'readonly', (store, resolve) => store.getAll().onsuccess = e => resolve(e.target.result)),
+            put: (storeName, item) => dbOp(storeName, 'readwrite', (store, resolve) => store.put(item).onsuccess = resolve),
+        };
+
+        // --- UI RENDERING LOGIC ---
+        async function renderProjects() {
+            const projects = await db.getAll('projects');
+            const list = document.getElementById('project-list');
+            list.innerHTML = '';
+            projects.forEach(project => {
+                const li = document.createElement('li');
+                li.textContent = project.title;
+                li.dataset.id = project.id;
+                if (project.id === state.activeProjectId) {
+                    li.classList.add('active');
+                }
+                li.addEventListener('click', () => setActiveProject(project.id));
+                list.appendChild(li);
+            });
+        }
+
+        async function renderSnippets(searchTerm = '') {
+            const snippets = await db.getAll('snippets');
+            const list = document.getElementById('snippet-list');
+            list.innerHTML = '';
+            
+            const filteredSnippets = snippets.filter(s => {
+                const search = searchTerm.toLowerCase();
+                return s.title.toLowerCase().includes(search) || 
+                       s.tags.some(tag => tag.toLowerCase().includes(search));
+            });
+
+            filteredSnippets.forEach(snippet => {
+                const li = document.createElement('li');
+                li.innerHTML = `${snippet.title} <br><small style="opacity: 0.6;">Tags: ${snippet.tags.join(', ')}</small>`;
+                li.dataset.id = snippet.id;
+                list.appendChild(li);
+            });
+        }
+
+        async function updateActiveProjectView() {
+            const project = await db.get('projects', state.activeProjectId);
+            const contextProjectDiv = document.getElementById('context-project');
+
+            if (project) {
+                document.getElementById('active-project-title').textContent = project.title;
+                contextProjectDiv.innerHTML = `
+                    <h4>Goal</h4><p>${project.goal}</p>
+                    <h4>Constraints</h4>
+                    <ul>${project.constraints.map(c => `<li>${c}</li>`).join('')}</ul>
+                `;
+            } else {
+                document.getElementById('active-project-title').textContent = "No Active Project";
+                contextProjectDiv.innerHTML = `<p>No project selected.</p>`;
+            }
+        }
+        
+        function updateLoadedSnippetsView(snippets) {
+            const div = document.getElementById('context-snippets');
+            if (!snippets || snippets.length === 0) {
+                div.innerHTML = '<p>No snippets loaded for this query.</p>';
+                return;
+            }
+            div.innerHTML = snippets.map(s => `
+                <div class="context-item">
+                    <h4>${s.title}</h4>
+                    <code>Tags: ${s.tags.join(', ')}</code>
+                </div>
+            `).join('');
+        }
+
+        // --- CORE LOGIC & EVENT HANDLERS ---
+        function setActiveProject(projectId) {
+            state.activeProjectId = projectId;
+            renderProjects();
+            updateActiveProjectView();
+            document.getElementById('context-snippets').innerHTML = '<p>No snippets loaded.</p>';
+        }
+
+        async function handleNewProject() {
+            const title = prompt("Enter project title:");
+            if (!title) return;
+            const goal = prompt("Enter the main goal of this project:");
+            if (!goal) return;
+
+            const newProject = {
+                id: `proj_${Date.now()}`,
+                title: title,
+                status: 'in-progress',
+                goal: goal,
+                constraints: ["Maintain clarity and modularity.", "Provide complete, usable outputs."],
+                key_decisions: [],
+            };
+            await db.add('projects', newProject);
+            setActiveProject(newProject.id);
+        }
+
+        async function handleNewSnippet() {
+            const title = prompt("Enter snippet title:");
+            if (!title) return;
+            const content = prompt("Enter snippet content (the 'fact' or code):");
+            if (!content) return;
+            const tags = prompt("Enter comma-separated tags (e.g., js, webdev, RAG):");
+            
+            const newSnippet = {
+                id: `snip_${Date.now()}`,
+                title,
+                content,
+                tags: tags ? tags.split(',').map(t => t.trim()) : [],
+                created_at: new Date().toISOString()
+            };
+            await db.add('snippets', newSnippet);
+            renderSnippets();
+        }
+
+        async function findRelevantSnippets(query) {
+            if (!query) return [];
+            const allSnippets = await db.getAll('snippets');
+            const queryTerms = new Set(query.toLowerCase().match(/\w+/g) || []);
+            
+            const scoredSnippets = allSnippets.map(snippet => {
+                let score = 0;
+                const titleTerms = new Set(snippet.title.toLowerCase().match(/\w+/g) || []);
+                const tagTerms = new Set(snippet.tags.map(t => t.toLowerCase()));
+
+                queryTerms.forEach(term => {
+                    if (titleTerms.has(term)) score += 2;
+                    if (tagTerms.has(term)) score += 3; // Tags are more important
+                    if (snippet.content.toLowerCase().includes(term)) score += 1;
+                });
+                return { snippet, score };
+            });
+
+            return scoredSnippets
+                .filter(item => item.score > 0)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 3) // Take top 3
+                .map(item => item.snippet);
+        }
+
+        async function generateAndCopyPrompt() {
+            if (!state.activeProjectId) {
+                alert("Please select a project first.");
+                return;
+            }
+            
+            const userQuery = document.getElementById('user-query').value;
+            if (!userQuery) {
+                alert("Please enter a query or request.");
+                return;
+            }
+
+            const persona = await db.get('config', 'core_persona') || { identity: ["Default User"], preferences: { communication_style: "Concise" }};
+            const project = await db.get('projects', state.activeProjectId);
+            const relevantSnippets = await findRelevantSnippets(userQuery);
+            
+            updateLoadedSnippetsView(relevantSnippets);
+
+            const promptScaffold = `
+# SYSTEM PROMPT: CORE DIRECTIVES & PERSONA
+
+## YOUR ROLE
+You are an expert assistant. Your goal is to help me achieve my objectives by providing clear, accurate, and actionable responses.
+
+## ABOUT ME (THE USER)
+- Identity: ${persona.identity.join(', ')}
+- Preferences: ${persona.preferences.communication_style}
+
+---
+# CURRENT TASK: ${project.title}
+
+## GOAL
+${project.goal}
+
+## CONSTRAINTS
+${project.constraints.map(c => `- ${c}`).join('\n')}
+
+---
+# RELEVANT KNOWLEDGE
+The following are snippets from my personal knowledge base. Use them to inform your response.
+
+${relevantSnippets.length > 0 ? relevantSnippets.map(s => `## Snippet: ${s.title}\n${s.content}`).join('\n\n') : 'No specific knowledge snippets were loaded for this query.'}
+
+---
+# MY REQUEST
+
+${userQuery}
+            `.trim();
+
+            const promptElement = document.getElementById('generated-prompt');
+            promptElement.textContent = promptScaffold;
+            
+            // Copy to clipboard
+            await navigator.clipboard.writeText(promptScaffold);
+            const btn = document.getElementById('generate-prompt-btn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = originalText; }, 2000);
+        }
+        
+        async function initializeApp() {
+            await initDB();
+            
+            // Seed database with default persona if it doesn't exist
+            let persona = await db.get('config', 'core_persona');
+            if (!persona) {
+                const defaultPersona = {
+                    id: "core_persona",
+                    identity: [
+                        "A curious individual using an LLM for creative and technical tasks.",
+                        "I value clarity, learning, and practical application."
+                    ],
+                    preferences: {
+                        communication_style: "Provide structured answers. Use markdown, lists, and code blocks where appropriate. Explain your reasoning."
+                    }
+                };
+                await db.add('config', defaultPersona);
+            }
+            
+            renderProjects();
+            renderSnippets();
+
+            // Attach event listeners
+            document.getElementById('new-project-btn').addEventListener('click', handleNewProject);
+            document.getElementById('new-snippet-btn').addEventListener('click', handleNewSnippet);
+            document.getElementById('generate-prompt-btn').addEventListener('click', generateAndCopyPrompt);
+            document.getElementById('snippet-search').addEventListener('input', (e) => renderSnippets(e.target.value));
+        }
+
+        // --- APP INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
