@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LLM Outcome Optimizer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(145deg, #1a1a2e, #16213e);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    header {
+      text-align: center;
+      padding: 1rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin: 0.5rem 0;
+    }
+
+    select, textarea, button {
+      width: 100%;
+      max-width: 600px;
+      margin: 1rem 0;
+      padding: 1rem;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+    }
+
+    select {
+      background: #0f3460;
+      color: #fff;
+    }
+
+    textarea {
+      height: 150px;
+      background: #1a1a2e;
+      color: #eee;
+    }
+
+    button {
+      background: #e94560;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #ff2e63;
+    }
+
+    .output {
+      width: 100%;
+      max-width: 600px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>LLM Outcome Optimizer</h1>
+    <p>Generate optimal prompts for top generative AI use cases</p>
+  </header>
+
+  <select id="useCase">
+    <option value="">🔽 Select a Use Case</option>
+    <option>Personal Tutor</option>
+    <option>Ad Copy Generator</option>
+    <option>Customer Support Bot</option>
+    <option>Second Brain Builder</option>
+    <option>Meeting Summarizer</option>
+    <option>Startup Idea Validator</option>
+    <option>Blog Writer</option>
+    <option>Legal Contract Explainer</option>
+    <option>Video Script Creator</option>
+    <option>HR Policy Assistant</option>
+  </select>
+
+  <textarea id="goalInput" placeholder="Describe your goal (e.g., Generate a blog post about AI for marketers)..."></textarea>
+
+  <button onclick="generatePrompt()">🎯 Generate Optimal Prompt</button>
+
+  <div class="output" id="promptOutput">Your prompt will appear here...</div>
+
+  <script>
+    function generatePrompt() {
+      const useCase = document.getElementById('useCase').value;
+      const goal = document.getElementById('goalInput').value.trim();
+
+      if (!useCase || !goal) {
+        alert('Please select a use case and enter your goal.');
+        return;
+      }
+
+      const prompt = `You are an expert ${useCase.toLowerCase()} assistant.
+Your goal is to help a user accomplish the following: "${goal}".
+Generate an optimal AI prompt that can achieve this goal effectively. Ensure the prompt includes:
+- Clear intent
+- Relevant context
+- Constraints (if any)
+- Desired output format
+
+Respond with only the generated AI prompt.`;
+
+      document.getElementById('promptOutput').textContent = prompt;
+    }
+  </script>
+</body>
+</html>
